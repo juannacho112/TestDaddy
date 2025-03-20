@@ -1,0 +1,8 @@
+
+
+MONGODB_URI=mongodb://YourMongoUsername:YourMongoPassword@localhost:27017/solana_pay?authSource=solana_pay
+//# xQUICKNODE_ENDPOINT=https://api.mainnet-beta.solana.com
+QUICKNODE_ENDPOINT=https://floral-bold-dust.solana-mainnet.quiknode.pro/YourQuickNodeURLorotherEndpointax
+MY_DESTINATION_WALLET=YourWalletAddresGoesHereNoQuotes
+COINGECKO_DEMO_API_KEY=YourCoinGeckoApiKetNoQuotes
+ZAPIER_WEBHOOK_URL=https://services.leadconnectorhq.com/hooks/ForGoHighLevel/or/Zapier.com/Webhook/EitherWorks/
