@@ -1,8 +1,9 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import { findReference } from '@solana/pay';
-import dbConnect from './lib/mongodb';
-import PaymentExpanded from './models/PaymentExpanded';
-import { QUICKNODE_ENDPOINT, ZAPIER_WEBHOOK_URL } from './config';
+import dbConnect from './lib/mongodb.js';
+import Payment from './models/Payment.js';
+import PaymentExpanded from './models/PaymentExpanded.js';
+import { QUICKNODE_ENDPOINT, ZAPIER_WEBHOOK_URL } from './config.js';
 import axios from 'axios';
 
 if (!QUICKNODE_ENDPOINT || !ZAPIER_WEBHOOK_URL) {
@@ -60,7 +61,8 @@ async function sendToZapier(payment: any): Promise<void> {
       throw new Error('ZAPIER_WEBHOOK_URL environment variable is not defined');
     }
     
-    const payload = {
+    // Basic payment details that both models share
+    const basePayload = {
       reference: payment.reference,
       recipient: payment.recipient,
       amount: payment.amount,
@@ -74,7 +76,23 @@ async function sendToZapier(payment: any): Promise<void> {
       status: payment.status,
     };
 
-    await axios.post(ZAPIER_WEBHOOK_URL, payload, {
+    // Add additional expanded fields if they exist
+    const expandedPayload = {
+      ...basePayload,
+      // Only include these fields if they exist in the payment object
+      ...(payment.phoneNumber && { phoneNumber: payment.phoneNumber }),
+      ...(payment.addressLine1 && { addressLine1: payment.addressLine1 }),
+      ...(payment.addressLine2 && { addressLine2: payment.addressLine2 }),
+      ...(payment.city && { city: payment.city }),
+      ...(payment.state && { state: payment.state }),
+      ...(payment.zipCode && { zipCode: payment.zipCode }),
+      ...(payment.country && { country: payment.country }),
+      ...(payment.shippingMethod && { shippingMethod: payment.shippingMethod }),
+      ...(payment.shippingCost !== undefined && { shippingCost: payment.shippingCost }),
+      ...(payment.cartTotal !== undefined && { cartTotal: payment.cartTotal }),
+    };
+
+    await axios.post(ZAPIER_WEBHOOK_URL, expandedPayload, {
       headers: { 'Content-Type': 'application/json' },
     });
 
@@ -89,11 +107,20 @@ async function sendToZapier(payment: any): Promise<void> {
 async function cancelOldPayments() {
   const cutoffTime = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours ago
   try {
-    const result = await PaymentExpanded.updateMany(
+    // Cancel old standard payments
+    const standardResult = await Payment.updateMany(
       { status: 'pending', createdAt: { $lt: cutoffTime } },
       { $set: { status: 'cancelled' } }
     );
-    console.log(`[INFO] Cancelled ${result.modifiedCount} old pending payments.`);
+    
+    // Cancel old expanded payments
+    const expandedResult = await PaymentExpanded.updateMany(
+      { status: 'pending', createdAt: { $lt: cutoffTime } },
+      { $set: { status: 'cancelled' } }
+    );
+    
+    const totalCancelled = standardResult.modifiedCount + expandedResult.modifiedCount;
+    console.log(`[INFO] Cancelled ${totalCancelled} old pending payments (${standardResult.modifiedCount} standard, ${expandedResult.modifiedCount} expanded).`);
   } catch (error) {
     console.error('[ERROR] Error cancelling old payments:', error);
   }
@@ -102,14 +129,21 @@ async function cancelOldPayments() {
 // Verify all pending payments
 async function verifyPayments() {
   console.log('[INFO] Fetching pending payments for verification...');
-  const pendingPayments = await PaymentExpanded.find({ status: 'pending' });
+  
+  // Get pending payments from both models
+  const pendingStandardPayments = await Payment.find({ status: 'pending' });
+  const pendingExpandedPayments = await PaymentExpanded.find({ status: 'pending' });
+  
+  const allPendingPayments = [...pendingStandardPayments, ...pendingExpandedPayments];
 
-  if (pendingPayments.length === 0) {
+  if (allPendingPayments.length === 0) {
     console.log('[INFO] No pending payments found.');
     return;
   }
 
-  for (const payment of pendingPayments) {
+  console.log(`[INFO] Found ${pendingStandardPayments.length} standard payments and ${pendingExpandedPayments.length} expanded payments pending verification.`);
+
+  for (const payment of allPendingPayments) {
     const isValid = await verifyTransactionUsingReference(payment);
 
     if (isValid) {
@@ -127,7 +161,7 @@ async function verifyPayments() {
 
 // Start the worker loop
 function startWorker() {
-  console.log('[INFO] Payment verification worker started.');
+  console.log('[INFO] Payment verification worker started (handling both standard and expanded payments).');
   setInterval(async () => {
     try {
       await cancelOldPayments(); // Cancel old payments
@@ -135,7 +169,7 @@ function startWorker() {
     } catch (error) {
       console.error('[ERROR] Error during payment verification loop:', error);
     }
-  }, 60000); // Run every 13 seconds
+  }, 60000); // Run every minute
 }
 
 startWorker();

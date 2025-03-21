@@ -5,8 +5,8 @@ import { PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import { encodeURL, createQR } from '@solana/pay';
 import { v4 as uuidv4 } from 'uuid';
 import BigNumber from 'bignumber.js';
-import dbConnect from '../../lib/mongodb.ts';
-import Payment, { IPayment } from '../../models/Payment.ts';
+import dbConnect from './lib/mongodb';
+import Payment, { IPayment } from './models/Payment';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {

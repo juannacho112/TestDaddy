@@ -3,16 +3,13 @@ import { Keypair, PublicKey } from '@solana/web3.js';
 import { encodeURL } from '@solana/pay';
 import BigNumber from 'bignumber.js';
 import axios from 'axios';
-import dbConnect from '../../../lib/mongodb.ts';
-import Payment from '../../../models/Payment.ts';
+import dbConnect from '../../../lib/mongodb';
+import Payment from '../../../models/Payment';
 import {
-  MONGODB_URI,
-  QUICKNODE_ENDPOINT,
   MY_DESTINATION_WALLET,
-  COINGECKO_DEMO_API_KEY,
-  ZAPIER_WEBHOOK_URL,
-} from '../../../config.ts';
-import { cache } from '../../../lib/cache.ts';
+  COINGECKO_DEMO_API_KEY
+} from '../../../config';
+import { cache } from '../../../lib/cache';
 
 // Define CORS headers
 const corsHeaders = {
@@ -24,7 +21,7 @@ const corsHeaders = {
 /**
  * Handle preflight (OPTIONS) requests for CORS
  */
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS() {
   return NextResponse.json(
     {},
     {
@@ -101,13 +98,19 @@ export async function POST(request: NextRequest) {
     }
 
     const ref = Keypair.generate().publicKey;
+    
+    // Ensure wallet address is defined
+    if (!MY_DESTINATION_WALLET) {
+      throw new Error('Destination wallet address is not defined');
+    }
+    
     const recipient = new PublicKey(MY_DESTINATION_WALLET);
 
     const url = encodeURL({
       recipient,
       amount: amountNeeded,
       reference: ref,
-      ...(splToken ? { splToken } : {}),
+      ...(splToken && { splToken }),
       label: 'My Store Payment',
       message,
       memo: memo || 'Payment from MyStore.com',
@@ -132,8 +135,9 @@ export async function POST(request: NextRequest) {
       { url: url.toString(), reference: ref.toBase58(), tokenUsed: token === 'daddy' ? 'DADDY' : 'SOL' },
       { status: 200, headers: corsHeaders }
     );
-  } catch (error) {
-    console.error('Error generating Solana Pay URL:', error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Error generating Solana Pay URL:', errorMessage);
     return NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500, headers: corsHeaders }

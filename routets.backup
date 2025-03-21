@@ -81,7 +81,7 @@ async function verifyTransaction(referencePubkey: PublicKey) {
   const pd = paymentRequests.get(referencePubkey.toBase58());
   if (!pd) throw new Error('Payment request not found');
 
-  const { recipient, amount, memo, splToken } = pd;
+  const { recipient, amount, splToken } = pd;
   const conn = new Connection(RPC_ENDPOINT, 'confirmed');
   const found = await findReference(conn, referencePubkey);
 
@@ -193,8 +193,9 @@ export async function POST(request: NextRequest) {
       }
     );
 
-  } catch (error) {
-    console.error('Error generating Solana Pay URL:', error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Error generating Solana Pay URL:', errorMessage);
     return NextResponse.json({ error: 'Internal Server Error' }, {
       status: 500,
       headers: {
@@ -246,8 +247,22 @@ export async function GET(request: NextRequest) {
             },
           });
           console.log("[DEBUG] Payment data sent to HighLevel webhook successfully.");
-        } catch (error) {
-          console.error("[ERROR] Failed to send payment data to HighLevel webhook:", error.response?.data || error.message);
+        } catch (webhookError: unknown) {
+          let errorDetails = '';
+          if (webhookError instanceof Error) {
+            errorDetails = webhookError.message;
+            // Safely handle axios error response data
+            if ('response' in webhookError && 
+                webhookError.response && 
+                typeof webhookError.response === 'object' && 
+                'data' in webhookError.response) {
+              errorDetails = String(webhookError.response.data);
+            }
+          } else {
+            errorDetails = String(webhookError);
+          }
+          
+          console.error("[ERROR] Failed to send payment data to HighLevel webhook:", errorDetails);
           // Optionally handle the error, e.g., retry or alert
         }
 
@@ -269,8 +284,9 @@ export async function GET(request: NextRequest) {
         },
       });
     }
-  } catch (err: any) {
-    console.error('Error verifying tx:', err);
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    console.error('Error verifying tx:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, {
       status: 500,
       headers: {

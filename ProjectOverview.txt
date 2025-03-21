@@ -1,0 +1,84 @@
+TestDaddy - Solana Pay Server Overview
+====================================
+
+System Architecture
+-----------------
+This is a Next.js application that processes Solana payments for DADDY/DADDY_TATE tokens, with the following components:
+
+1. Frontend (Next.js)
+   - Runs on port 3000
+   - Handles payment requests and generates Solana Pay URLs
+   - Uses app router architecture (app/ directory)
+
+2. Backend Services
+   - MongoDB database for payment tracking
+   - Background worker for transaction verification
+   - Zapier webhook integration for CRM updates
+
+3. Payment Flow
+   a. User initiates payment with amount, email, first name, last name
+   b. System generates unique Solana Pay URL with reference
+   c. Payment details stored in MongoDB as 'pending'
+   d. Background worker monitors for transaction completion
+   e. Once verified, payment status updated and sent to Zapier webhook
+
+Key Components
+-------------
+1. pay.ts
+   - Handles payment initiation
+   - Creates Solana Pay URLs
+   - Generates unique reference IDs
+   - Stores payment info in MongoDB
+
+2. worker.ts
+   - Runs continuously to verify pending payments
+   - Checks Solana blockchain for completed transactions
+   - Updates payment status in MongoDB
+   - Sends verified payments to Zapier webhook
+   - Cancels old pending payments (after 2 hours)
+
+3. MongoDB Integration
+   - Stores payment transactions
+   - Tracks payment status (pending/verified/cancelled)
+   - Caches connections for better performance
+
+4. Environment Configuration
+   Required variables in .env.local:
+   - MONGODB_URI: MongoDB connection string
+   - QUICKNODE_ENDPOINT: Solana node endpoint
+   - MY_DESTINATION_WALLET: Recipient wallet address
+   - COINGECKO_DEMO_API_KEY: For price data
+   - ZAPIER_WEBHOOK_URL: For CRM integration
+
+Technical Details
+---------------
+1. Solana Integration
+   - Uses @solana/pay for payment URLs
+   - Uses @solana/web3.js for blockchain interaction
+   - Monitors transactions using reference keys
+
+2. Token Details
+   - Token: DADDY/DADDY_TATE
+   - SPL Token Address: 4Cnk9EPnW5ixfLZatCPJjDB1PUtcRpVVgTQukm9epump
+
+3. Domain Configuration
+   - Previously configured as sol.atcostmarketing.com
+   - Points to server IP for production
+
+Dependencies
+-----------
+Key packages:
+- @solana/pay: Payment processing
+- @solana/web3.js: Solana blockchain interaction
+- mongoose: MongoDB interactions
+- next: Web framework
+- axios: HTTP requests
+- uuid: Reference generation
+- bignumber.js: Large number handling
+
+Development Tools
+---------------
+- TypeScript for type safety
+- ESLint for code quality
+- Tailwind CSS for styling
+- Concurrently for running multiple processes

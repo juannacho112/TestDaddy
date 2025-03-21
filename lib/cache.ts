@@ -6,7 +6,7 @@ type CacheEntry<T> = {
 };
 
 class SimpleCache {
-  private cache: Map<string, CacheEntry<any>> = new Map();
+  private cache: Map<string, CacheEntry<unknown>> = new Map();
 
   /**
    * Sets a value in the cache with a specified TTL.
@@ -31,7 +31,7 @@ class SimpleCache {
       this.cache.delete(key);
       return null;
     }
-    return entry.value;
+    return entry.value as T;
   }
 
   /**

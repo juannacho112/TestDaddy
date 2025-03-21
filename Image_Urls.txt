@@ -1,0 +1,3 @@
+Icon Url = "https://storage.googleapis.com/msgsndr/8RBOdgfyRq9tRvR8pUoM/media/67744357764e266bb148a79a.png"
+Product 1 Url = "https://storage.googleapis.com/msgsndr/J9mwncVuoamrfRbQL4Qu/media/67783caec290c6e428bfa886.png"
+Product 2 Url = "https://storage.googleapis.com/msgsndr/J9mwncVuoamrfRbQL4Qu/media/6774dcbe2ec4eb647160444e.jpeg"

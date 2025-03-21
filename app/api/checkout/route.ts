@@ -4,7 +4,6 @@ import { encodeURL } from '@solana/pay';
 import BigNumber from 'bignumber.js';
 import axios from 'axios';
 import dbConnect from '../../../lib/mongodb';
-import Payment from '../../../models/Payment';
 import PaymentExpanded from '../../../models/PaymentExpanded';
 import { MY_DESTINATION_WALLET } from '../../../config';
 
@@ -19,24 +18,27 @@ export async function OPTIONS() {
 }
 
 async function getTokenPriceUsd(token: string): Promise<number> {
-  const response = await axios.get(
-    `https://api.coingecko.com/api/v3/simple/price?ids=${token}&vs_currencies=usd`
-  );
-  return response.data[token]?.usd || 0;
+  try {
+    const response = await axios.get(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${token}&vs_currencies=usd`
+    );
+    return response.data[token]?.usd || 0;
+  } catch (error) {
+    console.error(`Error fetching price for ${token}:`, error);
+    throw new Error(`Unable to fetch price for ${token}`);
+  }
 }
 
 export async function POST(request: NextRequest) {
   const headers = new Headers(corsHeaders);
 
   try {
-    const { 
-      price, 
-      token, 
-      firstName, 
-      lastName, 
-      email, 
-      memo,
-      // Support for expanded fields
+    const {
+      cartTotal,
+      token,
+      firstName,
+      lastName,
+      email,
       phoneNumber,
       addressLine1,
       addressLine2,
@@ -45,23 +47,18 @@ export async function POST(request: NextRequest) {
       zipCode,
       country,
       shippingMethod,
-      cartTotal
+      memo
     } = await request.json();
 
-    if (!price || !firstName || !lastName || !email || !token) {
+    if (!cartTotal || !firstName || !lastName || !email || !token) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400, headers });
     }
 
-    // Calculate total price including shipping if shipping method is provided
-    let totalPrice = Number(price);
-    let shippingCost = 0;
-    
-    if (shippingMethod) {
-      shippingCost = shippingMethod === 'priority' ? 50 : 10;
-      totalPrice += shippingCost;
-    }
-
     await dbConnect();
+
+    // Calculate total price including shipping
+    const shippingCost = shippingMethod === 'priority' ? 50 : 10;
+    const totalPrice = Number(cartTotal) + shippingCost;
 
     // Normalize token to uppercase
     const normalizedToken = token.toUpperCase();
@@ -70,10 +67,16 @@ export async function POST(request: NextRequest) {
 
     if (normalizedToken === 'DADDY') {
       const daddyPriceUsd = await getTokenPriceUsd('daddy-tate');
+      if (!daddyPriceUsd) {
+        return NextResponse.json({ error: 'Error fetching DADDY token price' }, { status: 500, headers });
+      }
       amountNeeded = new BigNumber(totalPrice).dividedBy(daddyPriceUsd).decimalPlaces(6);
       splToken = new PublicKey('4Cnk9EPnW5ixfLZatCPJjDB1PUtcRpVVgTQukm9epump');
     } else if (normalizedToken === 'SOL') {
       const solPriceUsd = await getTokenPriceUsd('solana');
+      if (!solPriceUsd) {
+        return NextResponse.json({ error: 'Error fetching SOL price' }, { status: 500, headers });
+      }
       amountNeeded = new BigNumber(totalPrice).dividedBy(solPriceUsd).decimalPlaces(9);
       splToken = undefined;
     } else {
@@ -93,73 +96,50 @@ export async function POST(request: NextRequest) {
       amount: amountNeeded,
       reference: ref,
       ...(splToken && { splToken }),
-      label: 'My Store Payment',
-      message: `Payment for $${price}`,
-      memo: memo || 'Payment from MyStore.com',
+      label: 'Checkout Payment',
+      message: `Payment for $${totalPrice} (includes ${shippingMethod} shipping)`,
+      memo: memo || `${firstName} ${lastName}'s order with ${shippingMethod} shipping`,
     });
 
-    // Check if we have expanded information
-    const hasExpandedInfo = addressLine1 || phoneNumber || shippingMethod;
-    
-    if (hasExpandedInfo) {
-      // Create expanded payment record
-      const paymentRecord = new PaymentExpanded({
-        reference: ref.toBase58(),
-        recipient: recipient.toBase58(),
-        amount: amountNeeded.toString(),
-        memo: memo || 'Payment from MyStore.com',
-        splToken: splToken ? splToken.toBase58() : undefined,
-        firstName,
-        lastName,
-        email,
-        phoneNumber,
-        addressLine1,
-        addressLine2,
-        city,
-        state,
-        zipCode,
-        country,
-        shippingMethod,
-        shippingCost,
-        cartTotal: cartTotal || Number(price),
-        token: normalizedToken,
-        signature: null,
-        status: 'pending',
-      });
-      await paymentRecord.save();
-    } else {
-      // Create standard payment record
-      const paymentRecord = new Payment({
-        reference: ref.toBase58(),
-        recipient: recipient.toBase58(),
-        amount: amountNeeded.toString(),
-        memo: memo || 'Payment from MyStore.com',
-        splToken: splToken ? splToken.toBase58() : undefined,
-        firstName,
-        lastName,
-        email,
-        token: normalizedToken,
-        signature: null,
-        status: 'pending',
-      });
-      await paymentRecord.save();
-    }
+    const paymentRecord = new PaymentExpanded({
+      reference: ref.toBase58(),
+      recipient: recipient.toBase58(),
+      amount: amountNeeded.toString(),
+      memo: memo || `${firstName} ${lastName}'s order with ${shippingMethod} shipping`,
+      splToken: splToken ? splToken.toBase58() : undefined,
+      firstName,
+      lastName,
+      email,
+      phoneNumber,
+      addressLine1,
+      addressLine2,
+      city,
+      state,
+      zipCode,
+      country,
+      shippingMethod,
+      shippingCost,
+      cartTotal: Number(cartTotal),
+      token: normalizedToken,
+      signature: null,
+      status: 'pending',
+    });
 
-    return NextResponse.json({ 
-      url: url.toString(), 
-      reference: ref.toBase58(), 
+    await paymentRecord.save();
+
+    return NextResponse.json({
+      url: url.toString(),
+      reference: ref.toBase58(),
       tokenUsed: normalizedToken,
-      ...(shippingMethod && {
-        totalAmount: totalPrice,
-        shipping: {
-          method: shippingMethod,
-          cost: shippingCost
-        }
-      })
+      totalAmount: totalPrice,
+      shipping: {
+        method: shippingMethod,
+        cost: shippingCost
+      }
     }, { status: 200, headers });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Error generating Solana Pay URL:', errorMessage);
+    console.error('Error generating payment URL:', errorMessage);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500, headers });
   }
 }

@@ -1,14 +1,14 @@
-// app/api/pay/route.ts
+// models/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { encodeURL } from '@solana/pay';
 import BigNumber from 'bignumber.js';
 import axios from 'axios';
-import dbConnect from '../../../lib/mongodb.js'; // Adjust the path as necessary
-import Payment from '../../../models/Payment.js';
-import { MONGODB_URI, QUICKNODE_ENDPOINT, MY_DESTINATION_WALLET, COINGECKO_DEMO_API_KEY, ZAPIER_WEBHOOK_URL } from '../../../config.js';
-import { cache } from '../../../lib/cache.js'; // Optional: Implement caching
+import dbConnect from '../lib/mongodb'; // Correct relative path
+import Payment from './Payment'; // Correct relative path
+import { MONGODB_URI, QUICKNODE_ENDPOINT, MY_DESTINATION_WALLET, COINGECKO_DEMO_API_KEY, ZAPIER_WEBHOOK_URL } from '../config';
+import { cache } from '../lib/cache'; // Correct relative path
 
 // Define CORS headers
 const corsHeaders = {
@@ -116,6 +116,12 @@ export async function POST(request: NextRequest) {
 
     // Generate a unique reference
     const ref = Keypair.generate().publicKey;
+    
+    // Check if MY_DESTINATION_WALLET is defined
+    if (!MY_DESTINATION_WALLET) {
+      throw new Error('Destination wallet address is not defined in environment variables');
+    }
+    
     const recipient = new PublicKey(MY_DESTINATION_WALLET);
 
     // Encode the Solana Pay URL

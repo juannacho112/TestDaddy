@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Pay with Solana or DADDY</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    #paymentButtons {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    #paymentButtons button {
+      width: 100%;
+      padding: 12px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #000;
+      color: white;
+      border: 1px solid #333;
+      border-radius: 5px;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    #paymentButtons button:hover {
+      background-color: #333;
+      color: #fff;
+    }
+
+    .sol-button {
+      background-color: #9945FF !important;
+    }
+
+    .sol-button:hover {
+      background-color: #8035DB !important;
+    }
+
+    .daddy-button {
+      background-color: #14F195 !important;
+      color: #333 !important;
+    }
+
+    .daddy-button:hover {
+      background-color: #0AD680 !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Payment Buttons -->
+  <div id="paymentButtons">
+    <button type="button" class="sol-button" id="payWithSolanaBtn">
+      Pay with Solana
+    </button>
+    <button type="button" class="daddy-button" id="payWithDaddyBtn">
+      Pay with DADDY
+    </button>
+  </div>
+
+  <script>
+    // Helper to read the cart total from <p class="total-amount">
+    function getCartTotalUsd() {
+      const totalElem = document.querySelector('p.total-amount');
+      if (!totalElem) {
+        alert("Could not find an element with class 'total-amount' on this page.");
+        return null;
+      }
+      let cartTotalText = totalElem.innerText.trim().replace('$', '');
+      const cartTotal = parseFloat(cartTotalText);
+      if (isNaN(cartTotal)) {
+        alert("Could not parse a valid number from the total-amount text: " + cartTotalText);
+        return null;
+      }
+      return cartTotal; // in USD
+    }
+
+    // Option 1: Redirect to our checkout page
+    function redirectToCheckout() {
+      // Get the cart total
+      const cartTotal = getCartTotalUsd();
+      if (cartTotal === null) return;
+      
+      // Redirect to the checkout page with the cart total
+      const checkoutUrl = `http://localhost:3000/checkout?total=${cartTotal}`;
+      window.location.href = checkoutUrl;
+    }
+
+    // Option 2: Submit directly to the API with form data (original approach)
+    async function submitDirectPayment(token) {
+      // Collect user data from the page
+      // This assumes these fields are somewhere on your checkout page
+      // You would need to adapt this to your specific setup
+      const firstName = document.getElementById('firstName')?.value || '';
+      const lastName = document.getElementById('lastName')?.value || '';
+      const email = document.getElementById('email')?.value || '';
+      const phoneNumber = document.getElementById('phoneNumber')?.value || '';
+      const addressLine1 = document.getElementById('addressLine1')?.value || '';
+      const addressLine2 = document.getElementById('addressLine2')?.value || '';
+      const city = document.getElementById('city')?.value || '';
+      const state = document.getElementById('state')?.value || '';
+      const zipCode = document.getElementById('zipCode')?.value || '';
+      const country = document.getElementById('country')?.value || '';
+      const shippingMethod = document.querySelector('input[name="shippingMethod"]:checked')?.value || 'standard';
+      
+      // Check required fields
+      if (!firstName || !lastName || !email) {
+        alert("Please fill in all required fields.");
+        return;
+      }
+
+      const cartTotal = getCartTotalUsd();
+      if (cartTotal === null) return;
+
+      try {
+        // Submit directly to the API
+        const response = await fetch('http://localhost:3000/api/pay', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            price: cartTotal,
+            token,
+            firstName,
+            lastName,
+            email,
+            phoneNumber,
+            addressLine1,
+            addressLine2,
+            city,
+            state,
+            zipCode,
+            country,
+            shippingMethod
+          })
+        });
+        const responseData = await response.json();
+
+        if (responseData.error) {
+          alert(`Error generating payment link: ${responseData.error}`);
+          return;
+        }
+        console.log("Payment URL:", responseData.url);
+        window.open(responseData.url, '_blank');
+      } catch (error) {
+        console.error('Error calling payment endpoint:', error);
+        alert('Error generating payment link.');
+      }
+    }
+
+    // Attach the event listeners
+    // Use Option 1 by default - redirect to checkout
+    document.getElementById('payWithSolanaBtn')
+      .addEventListener('click', redirectToCheckout);
+
+    document.getElementById('payWithDaddyBtn')
+      .addEventListener('click', redirectToCheckout);
+
+    // If you want to use Option 2 instead - direct API submission
+    // Uncomment these lines:
+    /*
+    document.getElementById('payWithSolanaBtn')
+      .addEventListener('click', () => submitDirectPayment('SOL'));
+
+    document.getElementById('payWithDaddyBtn')
+      .addEventListener('click', () => submitDirectPayment('DADDY'));
+    */
+  </script>
+
+</body>
+</html>
